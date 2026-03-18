@@ -1,6 +1,6 @@
 streamlit
-transformers
+transformers<5.0.0
 torch
+sentencepiece
 beautifulsoup4
 requests
-tf-keras
