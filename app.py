@@ -10,99 +10,97 @@ import traceback
 st.set_page_config(page_title="AI Portfolio Analyzer", page_icon="🧠", layout="wide")
 
 # --- Deep Learning Model Caching ---
-# We use @st.cache_resource so the heavy ML models are only downloaded/loaded into memory ONCE.
+# Hum @st.cache_resource ka use kar rahe hain taaki bhari ML models sirf ek baar memory mein load hon.
 @st.cache_resource
 def load_ml_models():
-    # We import transformers here to avoid slowing down the initial page render
+    # Page jaldi load ho isliye hum transformers ko function ke andar import kar rahe hain
     from transformers import pipeline
     
     try:
-        # 1. Summarization Model (Smaller model for cloud hosting to avoid Out-Of-Memory errors)
+        # 1. Summarization Model (Cloud hosting ke liye chhota model taaki Out-Of-Memory error na aaye)
         summarizer = pipeline("summarization", model="Falconsai/text_summarization", framework="pt")
         
-        # 2. Zero-Shot Classifier (DistilBERT is much lighter than BART-large)
+        # 2. Zero-Shot Classifier (Skill nikalne ke liye DistilBERT, jo BART-large se kafi halka hai)
         classifier = pipeline("zero-shot-classification", model="typeform/distilbert-base-uncased-mnli", framework="pt")
         
-        # 3. Named Entity Recognition
+        # 3. Named Entity Recognition (Naam aur Company nikalne ke liye)
         ner = pipeline("ner", grouped_entities=True, model="dslim/bert-base-NER", framework="pt")
         
         return summarizer, classifier, ner
     except Exception as e:
-        # Return the error message so we can see it in the app instead of crashing
+        # Agar error aaye toh app crash na ho, balki error message return ho jaye
         return None, None, f"Model Loading Error: {str(e)}\n\n{traceback.format_exc()}"
 
 # --- Web Scraping Function ---
 def extract_text_from_url(url):
-    """Scrapes the URL and extracts clean visible text."""
+    """URL se data nikalta hai aur saaf text return karta hai."""
     try:
-        # Define headers to mimic a real browser to prevent 403 Forbidden errors
+        # Asli browser jaisa dikhne ke liye headers set kar rahe hain taaki 403 error na aaye
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Remove noisy elements (scripts, styles, navbars, footers)
+        # Faltu elements (scripts, styles, navbars) ko hata rahe hain
         for element in soup(["script", "style", "nav", "footer", "header", "noscript"]):
             element.extract()
             
-        # Extract text and clean up whitespaces
+        # Text nikalkar extra spaces ko saaf kar rahe hain
         text = soup.get_text(separator=' ')
         clean_text = re.sub(r'\s+', ' ', text).strip()
         
         return clean_text
     except Exception as e:
-        st.error(f"Error scraping URL: {e}")
+        st.error(f"URL se data nikalne mein error aaya: {e}")
         return None
 
 # --- Main Application UI ---
 def main():
     st.title("🧠 ProXcelerate: Deep Learning Portfolio Analyzer")
-    st.markdown("Enter a portfolio URL below. Our AI engine will scrape the site, run deep learning models (BART & BERT) to summarize the profile, extract verified skills, and identify key entities.")
+    st.markdown("Neeche kisi bhi portfolio ka URL daalein. Hamara AI us site ka data padhega aur Deep Learning models (BART & BERT) ka use karke profile ki summary banayega, skills nikalega aur zaruri details batayega.")
 
-    # 1. URL Input
+    # 1. URL Input Box
     url_input = st.text_input("Portfolio Website URL", placeholder="https://johndoe.dev")
     
-    if st.button("Analyze Portfolio", type="primary"):
+    if st.button("Portfolio Analyze Karein", type="primary"):
         if not url_input.startswith("http"):
-            st.warning("Please enter a valid URL starting with http:// or https://")
+            st.warning("Kripya ek sahi URL daalein jo http:// ya https:// se shuru hota ho.")
             return
 
         # 2. Loading Models
-        with st.spinner("Loading Deep Learning Models into memory (this takes a moment on first run)..."):
+        with st.spinner("Deep Learning Models memory mein load ho rahe hain (Pehli baar thoda samay lag sakta hai)..."):
             summarizer, classifier, ner = load_ml_models()
             
-        # Check if models failed to load
+        # Agar models load hone mein fail ho gaye
         if isinstance(ner, str) and "Error" in ner:
-            st.error("⚠️ Failed to load AI Models. Please check the error below:")
+            st.error("⚠️ AI Models load nahi ho paye. Kripya neeche error check karein:")
             st.code(ner)
-            st.info("Tip: If you are on Streamlit Cloud, click 'Manage App' -> ⋮ -> 'Reboot app'.")
+            st.info("Tip: Agar aap Streamlit Cloud par hain, toh 'Manage App' -> ⋮ -> 'Reboot app' par click karein.")
             return
         
         # 3. Scraping Data
-        with st.spinner("Scraping portfolio data..."):
+        with st.spinner("Portfolio se data nikala ja raha hai..."):
             raw_text = extract_text_from_url(url_input)
             
         if not raw_text:
             return
             
-        # Truncate text to avoid exceeding transformer model token limits (max 512 tokens)
-        # 2000 characters is a safer approximation for ~400 tokens
+        # AI models limit cross na karein isliye text ko chhota kar rahe hain (max ~400 tokens)
         safe_text = raw_text[:2000] 
 
         if len(safe_text) < 100:
-            st.warning("Not enough text could be extracted from this URL for AI analysis.")
+            st.warning("Is URL se AI analysis ke liye kafi data nahi mil paya.")
             return
 
         # 4. Running AI Predictions
-        with st.spinner("Running Deep Learning Inference (Summarization, NER, Zero-Shot Classification)..."):
+        with st.spinner("AI apka data analyze kar raha hai (Summarization, NER, Zero-Shot Classification)..."):
             # A. Summarization
             try:
-                # Added truncation=True to prevent indexing errors on long text
                 summary_out = summarizer(safe_text, max_length=130, min_length=30, do_sample=False, truncation=True)
                 summary_text = summary_out[0]['summary_text']
             except Exception as e:
-                summary_text = "Could not generate summary due to text format."
+                summary_text = "Data ka format sahi na hone ke karan summary nahi ban payi."
 
             # B. Skill Extraction (Zero-Shot)
             tech_skills = [
@@ -112,7 +110,7 @@ def main():
             ]
             try:
                 skill_predictions = classifier(safe_text, tech_skills, multi_label=True)
-                # Filter skills with a confidence score > 60%
+                # Jo skills 60% se zyada confidence ke sath mile hain, unhe filter karein
                 detected_skills = [
                     {"skill": skill, "score": score} 
                     for skill, score in zip(skill_predictions['labels'], skill_predictions['scores']) 
@@ -130,43 +128,43 @@ def main():
                 orgs, names = [], []
 
         # 5. Displaying Results Dashboard
-        st.success("Analysis Complete!")
+        st.success("Analysis Poori Ho Gayi!")
         
         st.header("📊 AI Career Intelligence Report")
         
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            st.subheader("📝 AI Profile Summary (BART Model)")
+            st.subheader("📝 AI Profile Summary")
             st.info(summary_text)
             
-            st.subheader("⚙️ Detected Technical Skills (Zero-Shot NLI)")
+            st.subheader("⚙️ Pehchani Gayi Technical Skills")
             if detected_skills:
                 for item in detected_skills:
-                    # Display skill with a progress bar representing AI confidence
+                    # AI confidence score dikhane ke liye progress bar
                     st.write(f"**{item['skill']}** (Confidence: {int(item['score']*100)}%)")
                     st.progress(float(item['score']))
             else:
-                st.write("No specific technical skills from our benchmark list were confidently detected.")
+                st.write("Hamari list mein se koi khaas technical skill detect nahi ho payi.")
 
         with col2:
-            st.subheader("🏢 Extracted Entities (BERT NER)")
-            st.markdown("**Organizations Mentioned:**")
+            st.subheader("🏢 Nikali Gayi Entities (NER)")
+            st.markdown("**Organizations (Company/Sanstha):**")
             if orgs:
                 for org in orgs:
                     st.markdown(f"- 🏢 `{org}`")
             else:
-                st.write("*None detected*")
+                st.write("*Kuch nahi mila*")
                 
-            st.markdown("**People Mentioned:**")
+            st.markdown("**Naam (Log):**")
             if names:
                 for name in names:
                     st.markdown(f"- 👤 `{name}`")
             else:
-                st.write("*None detected*")
+                st.write("*Kuch nahi mila*")
                 
-        # Expander for raw data verification
-        with st.expander("View Raw Extracted Text"):
+        # Asli text dekhne ke liye expander
+        with st.expander("Website se nikala gaya asli Text dekhein"):
             st.write(safe_text)
 
 if __name__ == "__main__":
