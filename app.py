@@ -6,7 +6,7 @@ import time
 import torch
 
 # --- Streamlit Page Config ---
-st.set_page_config(page_title="AI Portfolio Analyzer", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="AI Portfolio Analyzer", page_icon="🔗", layout="wide")
 
 # --- Deep Learning Model Caching ---
 # We use @st.cache_resource so the heavy ML models are only downloaded/loaded into memory ONCE.
