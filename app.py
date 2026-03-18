@@ -4,9 +4,10 @@ from bs4 import BeautifulSoup
 import re
 import time
 import torch
+import traceback
 
 # --- Streamlit Page Config ---
-st.set_page_config(page_title="AI Portfolio Analyzer", page_icon="🔗", layout="wide")
+st.set_page_config(page_title="AI Portfolio Analyzer", page_icon="🧠", layout="wide")
 
 # --- Deep Learning Model Caching ---
 # We use @st.cache_resource so the heavy ML models are only downloaded/loaded into memory ONCE.
@@ -15,16 +16,20 @@ def load_ml_models():
     # We import transformers here to avoid slowing down the initial page render
     from transformers import pipeline
     
-    # 1. Summarization Model (Smaller model for cloud hosting to avoid Out-Of-Memory errors)
-    summarizer = pipeline("summarization", model="Falconsai/text_summarization", framework="pt")
-    
-    # 2. Zero-Shot Classifier (DistilBERT is much lighter than BART-large)
-    classifier = pipeline("zero-shot-classification", model="typeform/distilbert-base-uncased-mnli", framework="pt")
-    
-    # 3. Named Entity Recognition
-    ner = pipeline("ner", grouped_entities=True, model="dslim/bert-base-NER", framework="pt")
-    
-    return summarizer, classifier, ner
+    try:
+        # 1. Summarization Model (Smaller model for cloud hosting to avoid Out-Of-Memory errors)
+        summarizer = pipeline("summarization", model="Falconsai/text_summarization", framework="pt")
+        
+        # 2. Zero-Shot Classifier (DistilBERT is much lighter than BART-large)
+        classifier = pipeline("zero-shot-classification", model="typeform/distilbert-base-uncased-mnli", framework="pt")
+        
+        # 3. Named Entity Recognition
+        ner = pipeline("ner", grouped_entities=True, model="dslim/bert-base-NER", framework="pt")
+        
+        return summarizer, classifier, ner
+    except Exception as e:
+        # Return the error message so we can see it in the app instead of crashing
+        return None, None, f"Model Loading Error: {str(e)}\n\n{traceback.format_exc()}"
 
 # --- Web Scraping Function ---
 def extract_text_from_url(url):
@@ -66,6 +71,13 @@ def main():
         # 2. Loading Models
         with st.spinner("Loading Deep Learning Models into memory (this takes a moment on first run)..."):
             summarizer, classifier, ner = load_ml_models()
+            
+        # Check if models failed to load
+        if isinstance(ner, str) and "Error" in ner:
+            st.error("⚠️ Failed to load AI Models. Please check the error below:")
+            st.code(ner)
+            st.info("Tip: If you are on Streamlit Cloud, click 'Manage App' -> ⋮ -> 'Reboot app'.")
+            return
         
         # 3. Scraping Data
         with st.spinner("Scraping portfolio data..."):
