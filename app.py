@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import time
+import torch
 
 # --- Streamlit Page Config ---
 st.set_page_config(page_title="AI Portfolio Analyzer", page_icon="🧠", layout="wide")
@@ -14,14 +15,14 @@ def load_ml_models():
     # We import transformers here to avoid slowing down the initial page render
     from transformers import pipeline
     
-    # 1. Summarization Model (DistilBART - optimized for speed)
-    summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+    # 1. Summarization Model (Smaller model for cloud hosting to avoid Out-Of-Memory errors)
+    summarizer = pipeline("summarization", model="Falconsai/text_summarization", framework="pt")
     
-    # 2. Zero-Shot Classifier for Skill Detection (BART-large-mnli)
-    classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+    # 2. Zero-Shot Classifier (DistilBERT is much lighter than BART-large)
+    classifier = pipeline("zero-shot-classification", model="typeform/distilbert-base-uncased-mnli", framework="pt")
     
-    # 3. Named Entity Recognition (BERT to find Organizations, Names, Locations)
-    ner = pipeline("ner", grouped_entities=True, model="dslim/bert-base-NER")
+    # 3. Named Entity Recognition
+    ner = pipeline("ner", grouped_entities=True, model="dslim/bert-base-NER", framework="pt")
     
     return summarizer, classifier, ner
 
@@ -73,9 +74,9 @@ def main():
         if not raw_text:
             return
             
-        # Truncate text to avoid exceeding transformer model token limits (~1024 tokens)
-        # 3000 characters is a safe approximation for ~750 tokens
-        safe_text = raw_text[:3000] 
+        # Truncate text to avoid exceeding transformer model token limits (max 512 tokens)
+        # 2000 characters is a safer approximation for ~400 tokens
+        safe_text = raw_text[:2000] 
 
         if len(safe_text) < 100:
             st.warning("Not enough text could be extracted from this URL for AI analysis.")
@@ -85,7 +86,8 @@ def main():
         with st.spinner("Running Deep Learning Inference (Summarization, NER, Zero-Shot Classification)..."):
             # A. Summarization
             try:
-                summary_out = summarizer(safe_text, max_length=130, min_length=30, do_sample=False)
+                # Added truncation=True to prevent indexing errors on long text
+                summary_out = summarizer(safe_text, max_length=130, min_length=30, do_sample=False, truncation=True)
                 summary_text = summary_out[0]['summary_text']
             except Exception as e:
                 summary_text = "Could not generate summary due to text format."
